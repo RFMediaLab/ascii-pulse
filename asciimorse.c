@@ -11,15 +11,15 @@
 
 /* PROFILE VALUES */
 /* This should be sliding-window determined */
-#define SILENCE_TIMEOUT 2000
-#define DIT 600
+#define SILENCE_TIMEOUT 1000
+#define DIT 60
 // Maximum time for a . 
-#define KEYMAX 1200
+#define KEYMAX 600
  // maximum time a key should ever be
 #define MAX_PULSES 6
  // Maximum number of pulses per character
 
-#define DEBOUNCE 10
+#define DEBOUNCE 5
  // Num millis to assume we're bounce
 
 
@@ -36,23 +36,23 @@ int inPulse = 0;
  * abstract this away to a seperate place eventually
  * Should support arbitrary pulse/char mappings
  */
-static const char* PULSE_TO_CHAR[128] = {
-        NULL, NULL, "E", "T", "I", "N", "A", "M",
-        "S", "D", "R", "G", "U", "K", "W", "O",
-        "H", "B", "L", "Z", "F", "C", "P", NULL,
-        "V", "X", NULL, "Q", NULL, "Y", "J", NULL,
-        "5", "6", NULL, "7", NULL, NULL, NULL, "8",
-        NULL, "/", NULL, NULL, NULL, "(", NULL, "9",
-        "4", "=", NULL, NULL, NULL, NULL, NULL, NULL,
-        "3", NULL, NULL, NULL, "2", NULL, "1", "0",
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL, ":",
-        NULL, NULL, NULL, NULL, "?", NULL, NULL, NULL,
-        NULL, NULL, "\"", NULL, NULL, NULL, "@", NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL, "'", NULL,
-        NULL, "-", NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, ".", NULL, "_", ")", NULL, NULL,
-        NULL, NULL, NULL, ",", NULL, "!", NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+char PULSE_TO_CHAR[128] = {
+        0, 0, 'E', 'T', 'I', 'N', 'A', 'M',
+        'S', 'D', 'R', 'G', 'U', 'K', 'W', 'O',
+        'H', 'B', 'L', 'Z', 'F', 'C', 'P', 0,
+        'V', 'X', 0, 'Q', 0, 'Y', 'J', 0,
+        '5', '6', 0, '7', 0, 0, 0, '8',
+        0, '/', 0, 0, 0, '(', 0, '9',
+        '4', '=', 0, 0, 0, 0, 0, 0,
+        '3', 0, 0, 0, '2', 0, '1', '0',
+        0, 0, 0, 0, 0, 0, 0, ':',
+        0, 0, 0, 0, '?', 0, 0, 0,
+        0, 0, '/', 0, 0, 0, '@', 0,
+        0, 0, 0, 0, 0, 0, '|', 0,
+        0, '-', 0, 0, 0, 0, 0, 0,
+        0, 0, '.', 0, '_', ')', 0, 0,
+        0, 0, 0, ',', 0, '!', 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0
 };
 
 void reset() {
@@ -72,13 +72,13 @@ void startPulse() {
 		// Don't reset start_milis
 	} else { 
 		start_millis = workingMillis; 
-		printf("Starting at %i\n", start_millis);
+		//printf("Starting at %i\n", start_millis);
 		while (digitalRead(KEY_LISTEN) == 1) {
 			delay(DEBOUNCE); 
 		} 
 		stop_millis = millis();
 		lastPdiff = stop_millis - start_millis;
-		printf("StopKey: %i ms\n", lastPdiff);
+		//printf("StopKey: %i ms\n", lastPdiff);
 		incData = 1;
 		
 	}
@@ -89,7 +89,7 @@ void startPulse() {
 
 
 void stopPulse() {
-	printf("gotPulseIRQ_FALLING\n");
+	//printf("gotPulseIRQ_FALLING\n");
 	stop_millis = millis();
 	if ( start_millis < stop_millis ){
 		lastPdiff = stop_millis - start_millis;
@@ -104,13 +104,13 @@ void stopPulse() {
 int  preProcessSequence() {
 	// break out if we're starting with a 0;
 	if ( coreBuffer[0] == 0 ) { return 0; }  
-	printf("Attempting to resolve sequence\n");	
+	//printf("Attempting to resolve sequence\n");	
 	unsigned char sum =0, bit;
 	int i = 0;
 	for (bit = 1; bit; bit <<= 1) {
-		printf("CoreBuff[%i] is %i, sum is %i\n", i, coreBuffer[i], sum ); 
 		switch(coreBuffer[i++]) {
 		case 0:
+			//printf("index: %i\n", sum|bit);
 			return sum | bit;
 		default: 
 			return 0;
@@ -128,16 +128,16 @@ int  preProcessSequence() {
 
 char lookupSequence(int index) 
 {
-	char* p = PULSE_TO_CHAR[index];
-	if (p == NULL) {
+	char p = PULSE_TO_CHAR[index];
+	if (p == 0 || p == NULL)  {
 		return 0;
 	} else {
-		return *p;
+		return p;
 	}
 }
 int convertPulse(int pDiff)
 {
-	printf("Converting pulse\n");
+	//printf("Converting pulse\n");
 	/* Converts a pulse-time into 0, 1 or 2
 	   1: Dit .
 	   2: DA -
@@ -190,7 +190,7 @@ int main(void)
 			if ( resB == 3 ) { // error or we're done 
 				c = lookupSequence(preProcessSequence());
 				if ( c != 0 ) {
-				printf("%c",c);}
+				printf("%c\n",c);}
 				reset();
 			} else {
 				coreBuffer[buffIndex] = resB;
@@ -205,7 +205,7 @@ int main(void)
 				} else {
 					c = lookupSequence(preProcessSequence());
 					if ( c != 0) {
-						printf("%c",c);
+						printf("%c\n",c);
 					}
 					timeout = millis();
 					reset();
