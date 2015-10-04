@@ -11,20 +11,41 @@
 
 /* PROFILE VALUES */
 /* This should be sliding-window determined */
-#define SILENCE_TIMEOUT 1
+#define SILENCE_TIMEOUT 10000;
 #define DIT 1000 // Maximum time for a . 
 #define KEYMAX = 5000 // maximum time a key should ever be
-#define MAX_PULSES = 16 // Maximum number of pulses per character
+#define MAX_PULSES = 6 // Maximum number of pulses per character
 int coreBuffer[MAX_PULSES];
-char *buff;
-char* readSequence(char* buffer);
 int listen();
 int index = 0;
 unsigned int start_mills = 0;
 unsigned int stop_mills = 0;
 int lastPdiff = 0;
-void (*readPulse)(void);
 bool incData = false;
+
+/*
+ * Thanks to jacquerie/morse.c
+ * abstract this away to a seperate place eventually
+ * Should support arbitrary pulse/char mappings
+ */
+static const char* PULSE_TO_CHAR[128] = {
+        NULL, NULL, "E", "T", "I", "N", "A", "M",
+        "S", "D", "R", "G", "U", "K", "W", "O",
+        "H", "B", "L", "Z", "F", "C", "P", NULL,
+        "V", "X", NULL, "Q", NULL, "Y", "J", NULL,
+        "5", "6", NULL, "7", NULL, NULL, NULL, "8",
+        NULL, "/", NULL, NULL, NULL, "(", NULL, "9",
+        "4", "=", NULL, NULL, NULL, NULL, NULL, NULL,
+        "3", NULL, NULL, NULL, "2", NULL, "1", "0",
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, ":",
+        NULL, NULL, NULL, NULL, "?", NULL, NULL, NULL,
+        NULL, NULL, "\"", NULL, NULL, NULL, "@", NULL,
+        NULL, NULL, NULL, NULL, NULL, NULL, "'", NULL,
+        NULL, "-", NULL, NULL, NULL, NULL, NULL, NULL,
+        NULL, NULL, ".", NULL, "_", ")", NULL, NULL,
+        NULL, NULL, NULL, ",", NULL, "!", NULL, NULL,
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
 
 void reset() {
 	start_mills = 0;
@@ -52,6 +73,7 @@ void stopPulse() {
 }
 
 int  preProcessSequence() {
+	
 	unsigned char sum =0, bit;
 	int i = 0;
 	for (bit = 1; bit; bit <<= 1) {
@@ -71,6 +93,8 @@ int  preProcessSequence() {
 	return 0;
 	
 }
+
+
 char lookupSequence(int index) {
 	return PULSE_TO_CHAR[index];
 }
@@ -83,7 +107,7 @@ int convertPulse(int pDiff)
 	*/
 
 	if ( pDiff < KEYMAX ) {
-		if (pDiff < DIT) {
+		if (pDiff <= DIT) {
 			return 1;
 		} else {
 			return 2;
@@ -132,4 +156,3 @@ int main(void)
 	}
 }
 
-:
