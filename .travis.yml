@@ -1,1 +1,6 @@
 language: c
+
+notifications:
+  slack:
+      rooms:
+            - rfmedialab:rJiQExJezOOVSnph5qkZpmdR#travis
