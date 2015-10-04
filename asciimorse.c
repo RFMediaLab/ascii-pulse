@@ -12,16 +12,19 @@
 /* PROFILE VALUES */
 /* This should be sliding-window determined */
 #define SILENCE_TIMEOUT 10000;
-#define DIT 1000 // Maximum time for a . 
-#define KEYMAX = 5000 // maximum time a key should ever be
-#define MAX_PULSES = 6 // Maximum number of pulses per character
+#define DIT 1000
+// Maximum time for a . 
+#define KEYMAX 5000
+ // maximum time a key should ever be
+#define MAX_PULSES 6
+ // Maximum number of pulses per character
 int coreBuffer[MAX_PULSES];
 int listen();
-int index = 0;
-unsigned int start_mills = 0;
-unsigned int stop_mills = 0;
+int buffIndex = 0;
+unsigned int start_millis = 0;
+unsigned int stop_millis = 0;
 int lastPdiff = 0;
-bool incData = false;
+int incData = 0;
 
 /*
  * Thanks to jacquerie/morse.c
@@ -48,23 +51,23 @@ static const char* PULSE_TO_CHAR[128] = {
 };
 
 void reset() {
-	start_mills = 0;
-	stop_mills = 0;
+	start_millis = 0;
+	stop_millis = 0;
 	lastPdiff = 0;
-	incData = false;
+	incData = 0;
 	memset(&coreBuffer[0], 0, sizeof(coreBuffer));
 	// index = 0;
 }
 
 void startPulse() {
 /* This function registers the start of a pulse */
-	start_mills = mills();
+	start_millis = millis();
 }
 void stopPulse() {
-	stop_mills = mills();
-	if ( start_mills < stop_mills ){
-		lastPdiff = stop_mills - start_mills;
-		incData = true
+	stop_millis = millis();
+	if ( start_millis < stop_millis ){
+		lastPdiff = stop_millis - start_millis;
+		incData = 1;
 	} else {
 		// Something went wrong, maybe the buffer overflowed
 		//reset();
@@ -96,7 +99,7 @@ int  preProcessSequence() {
 
 
 char lookupSequence(int index) {
-	return PULSE_TO_CHAR[index];
+	return *PULSE_TO_CHAR[index];
 }
 int convertPulse(int pDiff)
 {
@@ -136,16 +139,16 @@ int main(void)
 	int resR = wiringPiISR(KEY_LISTEN, INT_EDGE_RISING, &startPulse);
 	int resF = wiringPiISR(KEY_LISTEN, INT_EDGE_FALLING, &stopPulse);
 	/* Enter kernel loop */
-	while(true) {
+	while(1) {
 		char c = '?';
 		if ( incData ) {
 			int resB = convertPulse(lastPdiff);
 			// Add the symbol to the queue or process the char
 			if ( resB == 3 ) { // error or we're done 
-				c = lookupSequence(preProcessChar());
+				c = lookupSequence(preProcessSequence());
 				reset();
 			} else {
-				coreBuffer[index] = resB;
+				coreBuffer[buffIndex] = resB;
 			}  		
 		} else {
 			// do nothing
