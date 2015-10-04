@@ -11,10 +11,10 @@
 
 /* PROFILE VALUES */
 /* This should be sliding-window determined */
-#define SILENCE_TIMEOUT 10000;
-#define DIT 1000
+#define SILENCE_TIMEOUT 2000
+#define DIT 600
 // Maximum time for a . 
-#define KEYMAX 5000
+#define KEYMAX 1200
  // maximum time a key should ever be
 #define MAX_PULSES 6
  // Maximum number of pulses per character
@@ -25,7 +25,7 @@ unsigned int start_millis = 0;
 unsigned int stop_millis = 0;
 int lastPdiff = 0;
 int incData = 0;
-
+int inPulse = 0;
 /*
  * Thanks to jacquerie/morse.c
  * abstract this away to a seperate place eventually
@@ -57,13 +57,34 @@ void reset() {
 	incData = 0;
 	memset(&coreBuffer[0], 0, sizeof(coreBuffer));
 	// index = 0;
+	inPulse = 0;
+	buffIndex = 0;
 }
 
 void startPulse() {
+	// FIXME
 /* This function registers the start of a pulse */
-	start_millis = millis();
+	if ( inPulse ) {
+		
+		inPulse = 0;
+		stop_millis = millis();
+		if ( start_millis < stop_millis + 10 ){
+		lastPdiff = stop_millis - start_millis;
+		printf("StopKey: %i ms\n", lastPdiff);
+		incData = 1;
+		} else {
+		// Something went wrong, maybe the buffer overflowed
+		//reset();
+		printf("would have reset!/n");
+		}
+	} else {
+		printf("StartKey\n");
+		start_millis = millis();
+		inPulse = 1;
+	} 
 }
 void stopPulse() {
+	printf("gotPulseIRQ_FALLING\n");
 	stop_millis = millis();
 	if ( start_millis < stop_millis ){
 		lastPdiff = stop_millis - start_millis;
@@ -76,7 +97,9 @@ void stopPulse() {
 }
 
 int  preProcessSequence() {
-	
+	// break out if we're all 0s
+	if ( coreBuffer[0] == 0 ) { return 0; }  
+	printf("Attempting to resolve sequence\n");	
 	unsigned char sum =0, bit;
 	int i = 0;
 	for (bit = 1; bit; bit <<= 1) {
@@ -98,17 +121,24 @@ int  preProcessSequence() {
 }
 
 
-char lookupSequence(int index) {
-	return *PULSE_TO_CHAR[index];
+char lookupSequence(int index) 
+{
+	char* p = PULSE_TO_CHAR[index];
+	if (p == NULL) {
+		return 0;
+	} else {
+		return *p;
+	}
 }
 int convertPulse(int pDiff)
 {
+	printf("Converting pulse\n");
 	/* Converts a pulse-time into 0, 1 or 2
 	   1: Dit .
 	   2: DA -
 	   3: Something went wrong
 	*/
-
+	
 	if ( pDiff < KEYMAX ) {
 		if (pDiff <= DIT) {
 			return 1;
@@ -126,36 +156,57 @@ int main(void)
 	reset();
 	/* Call the setup function for wiringPi */
 	/* We're going to work with the pins directly */
+
+	printf("initializing...\n");
 	wiringPiSetupPhys();
 
 	/* Listen, and write  */  
-	pinMode(KEY_LISTEN, INPUT);
-	pinMode(KEY_SPEAK, OUTPUT);
+//	pinMode(KEY_LISTEN, INPUT);
+//	pinMode(KEY_SPEAK, OUTPUT);
 
 	/* set pullup for input pin */
-	pullUpDnControl(INPUT,PUD_UP);
+//	pullUpDnControl(INPUT,PUD_UP);
 
+	printf("Registering interrupts...\n");
 	/* Register inturrupt handler */
-	int resR = wiringPiISR(KEY_LISTEN, INT_EDGE_RISING, &startPulse);
-	int resF = wiringPiISR(KEY_LISTEN, INT_EDGE_FALLING, &stopPulse);
+	int resR = wiringPiISR(KEY_LISTEN, INT_EDGE_BOTH, &startPulse);
+	///int resF = wiringPiISR(KEY_LISTEN, INT_EDGE_FALLING, &stopPulse);
 	/* Enter kernel loop */
-	while(1) {
+	printf("Entering wait mode...\n");
+	int timeout = 0;
+	while(1) { 
 		char c = '?';
 		if ( incData ) {
+			timeout = millis();	
 			int resB = convertPulse(lastPdiff);
+			lastPdiff = 0;
+			incData = 0;
 			// Add the symbol to the queue or process the char
 			if ( resB == 3 ) { // error or we're done 
 				c = lookupSequence(preProcessSequence());
+				if ( c != 0 ) {
+				printf("%c",c);}
 				reset();
 			} else {
 				coreBuffer[buffIndex] = resB;
 			}  		
 		} else {
+			// check for timeout
+			if (millis() > timeout + SILENCE_TIMEOUT) {
+				//printf("timing out - printing\n");
+				c = lookupSequence(preProcessSequence());
+				if ( c != 0) {
+					printf("%c",c);
+				}
+				timeout = millis();
+				//reset();
+			} 
 			// do nothing
 			//sleep(.1);
-		} 
-		printf("%c",c);
+		}
 		
 	}
+	printf("broke out of loop?!\n");
+	return 1;
 }
 
