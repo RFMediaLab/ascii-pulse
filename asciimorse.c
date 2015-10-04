@@ -18,6 +18,11 @@
  // maximum time a key should ever be
 #define MAX_PULSES 6
  // Maximum number of pulses per character
+
+#define DEBOUNCE 10
+ // Num millis to assume we're bounce
+
+
 int coreBuffer[MAX_PULSES];
 int listen();
 int buffIndex = 0;
@@ -62,27 +67,27 @@ void reset() {
 }
 
 void startPulse() {
-	// FIXME
-/* This function registers the start of a pulse */
-	if ( inPulse ) {
-		
-		inPulse = 0;
+	int workingMillis = millis();
+	if ( (workingMillis - start_millis) < DEBOUNCE ) {
+		// Don't reset start_milis
+	} else { 
+		start_millis = workingMillis; 
+		printf("Starting at %i\n", start_millis);
+		while (digitalRead(KEY_LISTEN) == 1) {
+			delay(DEBOUNCE); 
+		} 
 		stop_millis = millis();
-		if ( start_millis < stop_millis + 10 ){
 		lastPdiff = stop_millis - start_millis;
 		printf("StopKey: %i ms\n", lastPdiff);
 		incData = 1;
-		} else {
-		// Something went wrong, maybe the buffer overflowed
-		//reset();
-		printf("would have reset!/n");
-		}
-	} else {
-		printf("StartKey\n");
-		start_millis = millis();
-		inPulse = 1;
-	} 
+		
+	}
+	delay(DEBOUNCE);
+	start_millis = millis();
+
 }
+
+
 void stopPulse() {
 	printf("gotPulseIRQ_FALLING\n");
 	stop_millis = millis();
@@ -97,13 +102,14 @@ void stopPulse() {
 }
 
 int  preProcessSequence() {
-	// break out if we're all 0s
+	// break out if we're starting with a 0;
 	if ( coreBuffer[0] == 0 ) { return 0; }  
 	printf("Attempting to resolve sequence\n");	
 	unsigned char sum =0, bit;
 	int i = 0;
 	for (bit = 1; bit; bit <<= 1) {
-		switch(coreBuffer[i]) {
+		printf("CoreBuff[%i] is %i, sum is %i\n", i, coreBuffer[i], sum ); 
+		switch(coreBuffer[i++]) {
 		case 0:
 			return sum | bit;
 		default: 
@@ -114,7 +120,6 @@ int  preProcessSequence() {
 			break;
 		}
 
-		i++;
 	}
 	return 0;
 	
@@ -169,7 +174,7 @@ int main(void)
 
 	printf("Registering interrupts...\n");
 	/* Register inturrupt handler */
-	int resR = wiringPiISR(KEY_LISTEN, INT_EDGE_BOTH, &startPulse);
+	int resR = wiringPiISR(KEY_LISTEN, INT_EDGE_RISING, &startPulse);
 	///int resF = wiringPiISR(KEY_LISTEN, INT_EDGE_FALLING, &stopPulse);
 	/* Enter kernel loop */
 	printf("Entering wait mode...\n");
@@ -189,17 +194,22 @@ int main(void)
 				reset();
 			} else {
 				coreBuffer[buffIndex] = resB;
+				buffIndex++;
 			}  		
 		} else {
 			// check for timeout
 			if (millis() > timeout + SILENCE_TIMEOUT) {
 				//printf("timing out - printing\n");
-				c = lookupSequence(preProcessSequence());
-				if ( c != 0) {
-					printf("%c",c);
+				if ( coreBuffer[0] == 0 ) {
+					// Buffer is 0, don't do anything
+				} else {
+					c = lookupSequence(preProcessSequence());
+					if ( c != 0) {
+						printf("%c",c);
+					}
+					timeout = millis();
+					reset();
 				}
-				timeout = millis();
-				//reset();
 			} 
 			// do nothing
 			//sleep(.1);
